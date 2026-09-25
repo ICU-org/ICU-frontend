@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAdminSession } from "@/entities/AdminSession";
 import { PARTNER_SERVICES, PARTNER_TYPES, SERVICE_LABEL, TYPE_LABEL, type AdminPartner } from "@/entities/Partner";
 import { useFieldError, useLocale, useT } from "@/shared/i18n";
-import { toLocalizedForm } from "@/shared/lib";
+import { clearDraft, readDraft, toLocalizedForm, useFocusFirstInvalid } from "@/shared/lib";
 import { Button, Input, LocalizedField, Select } from "@/shared/ui";
 import { PartnerSchema, type PartnerValues } from "../zod/schema";
-import { useSavePartner } from "../model/useSavePartner";
+import { partnerDraftKey, useSavePartner } from "../model/useSavePartner";
 
 type Props = {
   /** Нет — новый партнёр. */
@@ -14,7 +16,16 @@ type Props = {
   onCancel: () => void;
 };
 
-const toNumberOrNull = (value: unknown) => (value === "" || value === null || value === undefined ? null : Number(value));
+/**
+ * Поле числа — текстовое: у type="number" браузер отдаёт "" на «12e», и
+ * ошибочный ввод молча становился пустым. Пусто → null, целое → число,
+ * остальное → NaN (схема покажет «Нужно целое число»).
+ */
+const toIntOrNull = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  return /^-?\d+$/.test(text) ? Number(text) : Number.NaN;
+};
 
 export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
   const t = useT();
@@ -23,28 +34,55 @@ export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
   const codes = locales.map((l) => l.code);
   const { save, error } = useSavePartner();
 
+  const fromServer = (): PartnerValues => ({
+    name: toLocalizedForm(partner?.name, codes),
+    description: toLocalizedForm(partner?.description, codes),
+    type: partner?.type ?? "CARRIER",
+    services: partner?.services ?? [],
+    vehicleCount: partner?.vehicleCount ?? null,
+    partnerSince: partner?.partnerSince ?? null,
+    sortOrder: partner?.sortOrder ?? 0,
+    isVisible: partner?.isVisible ?? true,
+  });
+  // черновик остался после истёкшей сессии — форма начинает с него
+  const draftKey = partnerDraftKey(partner?.id);
+  const adminId = useAdminSession((s) => s.admin?.id);
+  const [draft] = useState(() => {
+    const value = readDraft<PartnerValues>(draftKey, adminId);
+    // форма могла поменяться после выпуска — непохожий черновик не подставляем
+    if (value && !PartnerSchema.safeParse(value).success) {
+      clearDraft(draftKey);
+      return null;
+    }
+    return value;
+  });
+  const [showDraftNotice, setShowDraftNotice] = useState(Boolean(draft));
+
   const {
     register,
     control,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    reset,
+    formState: { errors, isSubmitting, submitCount },
   } = useForm<PartnerValues>({
     resolver: zodResolver(PartnerSchema),
-    defaultValues: {
-      name: toLocalizedForm(partner?.name, codes),
-      description: toLocalizedForm(partner?.description, codes),
-      type: partner?.type ?? "CARRIER",
-      services: partner?.services ?? [],
-      vehicleCount: partner?.vehicleCount ?? null,
-      partnerSince: partner?.partnerSince ?? null,
-      sortOrder: partner?.sortOrder ?? 0,
-      isVisible: partner?.isVisible ?? true,
-    },
+    defaultValues: draft ?? fromServer(),
+    shouldFocusError: false, // фокус — по порядку на экране, см. useFocusFirstInvalid
   });
+  const formRef = useFocusFirstInvalid(submitCount);
+
+  const discardDraft = () => {
+    clearDraft(draftKey);
+    setShowDraftNotice(false);
+    reset(fromServer());
+  };
 
   const onSubmit = handleSubmit(async (values) => {
     const saved = await save(partner?.id, values);
-    if (saved) onSaved(saved);
+    if (saved) {
+      clearDraft(draftKey);
+      onSaved(saved);
+    }
   });
 
   const prefix = partner?.id ?? "new";
@@ -52,7 +90,15 @@ export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
   const numberError = (key: "vehicleCount" | "partnerSince" | "sortOrder") => fieldError(errors[key]?.message);
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-5 rounded border border-line bg-card p-5">
+    <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-5 rounded border border-line bg-card p-5">
+      {showDraftNotice && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded bg-accent-soft p-3 text-sm">
+          {t("admin.draftRestored")}
+          <Button variant="ghost" onClick={discardDraft}>
+            {t("admin.discardDraft")}
+          </Button>
+        </div>
+      )}
       <Controller
         name="name"
         control={control}
@@ -62,6 +108,8 @@ export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
             label={t("admin.partnerName")}
             value={field.value}
             onChange={field.onChange}
+            inputRef={field.ref}
+            required
             maxLength={120}
             error={fieldError(errors.name?.message)}
             {...localizedProps}
@@ -77,6 +125,7 @@ export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
             label={t("admin.partnerDescription")}
             value={field.value}
             onChange={field.onChange}
+            inputRef={field.ref}
             multiline
             maxLength={600}
             error={fieldError(errors.description?.message)}
@@ -128,12 +177,14 @@ export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
               </label>
               <Input
                 id={id}
-                type="number"
-                inputMode="numeric"
+                type="text"
+                // порядок бывает отрицательным — нужна клавиатура с минусом
+                inputMode={key === "sortOrder" ? "text" : "numeric"}
+                autoComplete="off"
                 aria-invalid={Boolean(message)}
                 aria-describedby={message ? `${id}-error` : undefined}
                 {...register(key, {
-                  setValueAs: key === "sortOrder" ? (v) => toNumberOrNull(v) ?? 0 : toNumberOrNull,
+                  setValueAs: key === "sortOrder" ? (v) => toIntOrNull(v) ?? 0 : toIntOrNull,
                 })}
               />
               {message && (
@@ -160,7 +211,10 @@ export const PartnerForm = ({ partner, onSaved, onCancel }: Props) => {
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? t("admin.saving") : t("admin.save")}
         </Button>
-        <Button variant="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={() => {
+            clearDraft(draftKey);
+            onCancel();
+          }}>
           {t("admin.cancel")}
         </Button>
       </div>
