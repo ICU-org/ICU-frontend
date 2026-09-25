@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Переменные темы. Формат "R G B" без rgb(), чтобы работала прозрачность (bg-bg/50).
+ * Светлая — из макета ICU-v2.html; тёмная — временная, до этапа дизайна.
+ * Новый цвет добавляется в обе темы и в tailwind.config.js.
+ */
+@layer base {
+  :root,
+  :root[data-theme="light"] {
+    --color-bg: 233 234 236;
+    --color-surface: 245 245 246;
+    --color-card: 255 255 255;
+    --color-line: 214 216 219;
+    --color-text: 31 35 40;
+    --color-muted: 107 112 120;
+    --color-accent: 61 90 115;
+    --color-accent-soft: 223 229 234;
+    --color-on-accent: 255 255 255;
+    --color-ok: 79 122 90;
+    --color-danger: 161 74 63;
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"] {
+    --color-bg: 21 24 28;
+    --color-surface: 28 32 37;
+    --color-card: 34 39 45;
+    --color-line: 51 57 64;
+    --color-text: 230 232 235;
+    --color-muted: 150 156 165;
+    --color-accent: 122 156 184;
+    --color-accent-soft: 40 52 63;
+    --color-on-accent: 17 20 24;
+    --color-ok: 120 170 132;
+    --color-danger: 214 120 108;
+    color-scheme: dark;
+  }
+
+  html, body, #root { height: 100%; }
+
+  body {
+    margin: 0;
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-text));
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.5;
+  }
+}
