@@ -2,14 +2,9 @@ import { z } from "zod";
 import { PARTNER_SERVICES, PARTNER_TYPES } from "@/entities/Partner";
 import { localizedSchema } from "@/shared/lib";
 
-/** Число из поля ввода: пусто → null (см. setValueAs в форме). */
-const optionalInt = (min: number, max: number) =>
-  z
-    .number({ error: "validation.invalidNumber" })
-    .int("validation.invalidNumber")
-    .min(min, "validation.invalidNumber")
-    .max(max, "validation.invalidNumber")
-    .nullable();
+/** Целое из поля ввода: пусто → null, не число → NaN (см. toIntOrNull в форме). */
+const int = () => z.number({ error: "validation.invalidNumber" }).int("validation.invalidNumber");
+const YEAR_MAX = new Date().getFullYear() + 1;
 
 /** Те же границы, что у бэкенда (content.validation.ts). */
 export const PartnerSchema = z.object({
@@ -17,13 +12,9 @@ export const PartnerSchema = z.object({
   description: localizedSchema(600, false),
   type: z.enum(PARTNER_TYPES),
   services: z.array(z.enum(PARTNER_SERVICES)),
-  vehicleCount: optionalInt(0, 1_000_000),
-  partnerSince: optionalInt(1990, new Date().getFullYear() + 1),
-  sortOrder: z
-    .number({ error: "validation.invalidNumber" })
-    .int("validation.invalidNumber")
-    .min(-10_000, "validation.invalidNumber")
-    .max(10_000, "validation.invalidNumber"),
+  vehicleCount: int().min(0, "validation.notNegative").max(1_000_000, "validation.numberTooLarge").nullable(),
+  partnerSince: int().min(1990, "validation.yearRange").max(YEAR_MAX, "validation.yearRange").nullable(),
+  sortOrder: int().min(-10_000, "validation.numberTooLarge").max(10_000, "validation.numberTooLarge"),
   isVisible: z.boolean(),
 });
 export type PartnerValues = z.infer<typeof PartnerSchema>;

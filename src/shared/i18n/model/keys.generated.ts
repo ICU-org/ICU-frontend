@@ -25,6 +25,8 @@ export const TRANSLATION_KEYS = [
   "admin.deleteConfirmYes",
   "admin.deleteFailed",
   "admin.deletePartnerConfirm",
+  "admin.discardDraft",
+  "admin.draftRestored",
   "admin.editPartner",
   "admin.empty",
   "admin.exclude",
@@ -83,6 +85,7 @@ export const TRANSLATION_KEYS = [
   "admin.saveFailed",
   "admin.saved",
   "admin.saving",
+  "admin.sessionExpired",
   "admin.signIn",
   "admin.signOut",
   "admin.signingIn",
@@ -148,11 +151,15 @@ export const TRANSLATION_KEYS = [
   "validation.invalidEmail",
   "validation.invalidNumber",
   "validation.invalidPhone",
+  "validation.notNegative",
+  "validation.numberTooLarge",
   "validation.periodFuture",
   "validation.periodOrder",
   "validation.required",
+  "validation.requiredIfTranslated",
   "validation.tooLong",
   "validation.tooShort",
+  "validation.yearRange",
 ] as const;
 
 export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
