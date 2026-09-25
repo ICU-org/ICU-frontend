@@ -17,8 +17,8 @@ export const localizedSchema = (max: number, required: boolean) =>
   z.record(z.string(), z.string()).superRefine((value, ctx) => {
     const texts = Object.values(value).map((text) => text.trim());
     if (texts.some((text) => text.length > max)) ctx.addIssue({ code: "custom", message: "validation.tooLong" });
-    const anyFilled = texts.some(Boolean);
-    if ((required || anyFilled) && !value[getDefaultLocale()]?.trim()) {
-      ctx.addIssue({ code: "custom", message: "validation.required" });
-    }
+    if (value[getDefaultLocale()]?.trim()) return;
+    if (required) ctx.addIssue({ code: "custom", message: "validation.required" });
+    // необязательное поле: перевод есть, а армянского нет
+    else if (texts.some(Boolean)) ctx.addIssue({ code: "custom", message: "validation.requiredIfTranslated" });
   });

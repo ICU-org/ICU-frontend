@@ -7,14 +7,17 @@ export function usePartnerLogo(onChanged: (partner: AdminPartner) => void) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** true — получилось. */
   const run = useCallback(
     async (action: () => Promise<AdminPartner>) => {
       setPending(true);
       setError(null);
       try {
         onChanged(await action());
+        return true;
       } catch (err) {
         if (!expireOnUnauthorized(err)) setError(getErrorMessage(err, "admin.saveFailed"));
+        return false;
       } finally {
         setPending(false);
       }

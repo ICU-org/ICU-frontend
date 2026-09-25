@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { expireOnUnauthorized } from "@/entities/AdminSession";
+import { expireOnUnauthorized, useAdminSession } from "@/entities/AdminSession";
 import { getAdminAbout, saveAbout, type AboutData, type AdminAbout } from "@/entities/About";
-import { getErrorMessage } from "@/shared/lib";
+import { getErrorMessage, saveDraft } from "@/shared/lib";
+
+export const ABOUT_DRAFT_KEY = "about";
 
 type State = { status: "loading" } | { status: "error"; error: string } | { status: "ready"; about: AdminAbout | null };
 
@@ -35,7 +37,11 @@ export function useAboutEditor() {
       setSavedAt(about?.updatedAt ?? null);
       return true;
     } catch (err) {
-      if (!expireOnUnauthorized(err)) setSaveError(getErrorMessage(err, "admin.saveFailed"));
+      // сессия истекла — введённое сохраняется, после входа форма его восстановит
+      const owner = useAdminSession.getState().admin?.id;
+      if (!expireOnUnauthorized(err, () => owner && saveDraft(ABOUT_DRAFT_KEY, data, owner))) {
+        setSaveError(getErrorMessage(err, "admin.saveFailed"));
+      }
       return false;
     }
   }, []);

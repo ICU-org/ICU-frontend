@@ -15,7 +15,8 @@ const AdminLayout = () => {
   const t = useT();
   const status = useAdminSession((s) => s.status);
   const check = useAdminSession((s) => s.check);
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
 
   useEffect(() => {
     if (status === "idle") void check();
@@ -32,9 +33,11 @@ const AdminLayout = () => {
     );
   }
 
+  // на вход — с адресом, где работали; после входа — обратно туда же, а не на /admin
   const onLoginPage = pathname === LOGIN_PATH;
-  if (status === "anonymous" && !onLoginPage) return <Navigate to={LOGIN_PATH} replace />;
-  if (status === "authenticated" && onLoginPage) return <Navigate to="/admin" replace />;
+  const returnTo = (location.state as { from?: string } | null)?.from;
+  if (status === "anonymous" && !onLoginPage) return <Navigate to={LOGIN_PATH} replace state={{ from: pathname + location.search }} />;
+  if (status === "authenticated" && onLoginPage) return <Navigate to={returnTo?.startsWith("/admin") ? returnTo : "/admin"} replace />;
 
   return (
     <div className="min-h-screen">

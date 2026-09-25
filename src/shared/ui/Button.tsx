@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 import { cn } from "@/shared/lib";
 
@@ -18,7 +18,8 @@ const buttonClass = (variant: Variant, className?: string) =>
     className
   );
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant };
+// ComponentProps, а не ButtonHTMLAttributes: в React 19 ref — обычный проп
+type ButtonProps = ComponentProps<"button"> & { variant?: Variant };
 
 export const Button = ({ variant = "primary", className, type = "button", ...props }: ButtonProps) => (
   <button type={type} className={buttonClass(variant, className)} {...props} />

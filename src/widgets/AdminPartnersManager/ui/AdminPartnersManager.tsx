@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DeletePartnerButton } from "@/features/DeletePartner";
-import { PartnerForm } from "@/features/EditPartner";
+import { PartnerForm, partnerDraftKey } from "@/features/EditPartner";
+import { useAdminSession } from "@/entities/AdminSession";
 import { PartnerLogoUpload } from "@/features/PartnerLogoUpload";
 import { PartnerLogo, TYPE_LABEL, partnerDisplayName, type AdminPartner } from "@/entities/Partner";
 import { useLocale, useT } from "@/shared/i18n";
+import { clearDraft, listDrafts } from "@/shared/lib";
 import { Button, ButtonLink, Spinner } from "@/shared/ui";
 import { useAdminPartners } from "../model/useAdminPartners";
 
@@ -18,7 +20,27 @@ export const AdminPartnersManager = () => {
   const location = useLocation();
   const navigate = useNavigate();
   /** id партнёра, открытого на изменение. */
-  const [editing, setEditing] = useState<string | null>(null);
+  // вернулись после истёкшей сессии — сразу открыть партнёра с несохранённым черновиком
+  const adminId = useAdminSession((s) => s.admin?.id);
+  /** undefined — ещё не выбирали: тогда открыт партнёр с черновиком (вернулись после истёкшей сессии). */
+  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
+  const [draftPartnerId] = useState(() => listDrafts("partner:", adminId).find((id) => id !== "new") ?? null);
+  const editing =
+    chosen !== undefined ? chosen : draftPartnerId && items.some((p) => p.id === draftPartnerId) ? draftPartnerId : null;
+
+  // черновики партнёров, которых больше нет (удалили), — мусор
+  useEffect(() => {
+    if (loading || error) return;
+    for (const id of listDrafts("partner:", adminId)) {
+      if (id !== "new" && !items.some((p) => p.id === id)) clearDraft(partnerDraftKey(id));
+    }
+  }, [items, loading, error, adminId]);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  /** Строка исчезла вместе с нажатой кнопкой — фокус на заголовок, а не в начало страницы. */
+  const onDeleted = () => {
+    reload();
+    titleRef.current?.focus();
+  };
   /** Имя последнего сохранённого — для «Сохранено: …»; сбрасывается при следующем действии. */
   const [savedName, setSavedName] = useState<string | null>(() => (location.state as LocationState)?.savedName ?? null);
 
@@ -31,13 +53,15 @@ export const AdminPartnersManager = () => {
 
   const openEditor = (id: string | null) => {
     setSavedName(null);
-    setEditing(id);
+    // закрыли открытую форму «Изменить» — это отказ от правок, черновик тоже
+    if (editing && editing !== id) clearDraft(partnerDraftKey(editing));
+    setChosen(id);
   };
 
   // после сохранения форма закрывается; снова открыть — «Изменить» (там же логотип)
   const onSaved = (saved: AdminPartner) => {
     reload();
-    setEditing(null);
+    setChosen(null);
     setSavedName(nameOf(saved));
   };
 
@@ -45,7 +69,7 @@ export const AdminPartnersManager = () => {
     <section aria-labelledby="partners-admin-title" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 id="partners-admin-title" className="text-2xl font-semibold">
+          <h1 id="partners-admin-title" ref={titleRef} tabIndex={-1} className="text-2xl font-semibold focus:outline-none">
             {t("admin.partnersTitle")}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">{t("admin.partnersHint")}</p>
@@ -97,13 +121,13 @@ export const AdminPartnersManager = () => {
                   >
                     {t("admin.editPartner")}
                   </Button>
-                  <DeletePartnerButton id={partner.id} onDeleted={reload} />
+                  <DeletePartnerButton id={partner.id} onDeleted={onDeleted} />
                 </div>
               </div>
               {editing === partner.id && (
                 <div className="space-y-3 border-l-2 border-accent pl-3">
                   {/* без key по updatedAt: загрузка логотипа обновляет список, но не должна стирать несохранённые правки */}
-                  <PartnerForm partner={partner} onSaved={onSaved} onCancel={() => setEditing(null)} />
+                  <PartnerForm partner={partner} onSaved={onSaved} onCancel={() => setChosen(null)} />
                   <PartnerLogoUpload partner={partner} onChanged={reload} />
                 </div>
               )}

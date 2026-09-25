@@ -2,12 +2,16 @@ import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AboutData, AdminAbout } from "@/entities/About";
 import { useFieldError, useLocale, useT } from "@/shared/i18n";
-import { formatDateTime, toLocalizedForm } from "@/shared/lib";
+import { formatDateTime, toLocalizedForm, useFocusFirstInvalid } from "@/shared/lib";
 import { Button, Input, LocalizedField } from "@/shared/ui";
 import { AboutSchema, type AboutValues } from "../zod/schema";
 
 type Props = {
   about: AdminAbout | null;
+  /** Несохранённое с прошлой (истёкшей) сессии — форма начинает с него. */
+  draft: AboutData | null;
+  showDraftNotice: boolean;
+  onDiscardDraft: () => void;
   onSave: (data: AboutData) => Promise<boolean>;
   saveError: string | null;
   savedAt: string | null;
@@ -16,20 +20,21 @@ type Props = {
 const MAX_STATS = 6;
 const MAX_ACTIVITIES = 20;
 
-export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
+export const AboutForm = ({ about, draft, showDraftNotice, onDiscardDraft, onSave, saveError, savedAt }: Props) => {
   const t = useT();
   const fieldError = useFieldError();
   const { locale, locales, defaultLocale } = useLocale();
   const codes = locales.map((l) => l.code);
-  const data = about?.data;
+  const data = draft ?? about?.data;
 
   const {
     register,
     control,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, submitCount },
   } = useForm<AboutValues>({
     resolver: zodResolver(AboutSchema),
+    shouldFocusError: false, // фокус — по порядку на экране, см. useFocusFirstInvalid
     defaultValues: {
       intro: toLocalizedForm(data?.intro, codes),
       stats: (data?.stats ?? []).map((s) => ({ value: s.value, label: toLocalizedForm(s.label, codes) })),
@@ -43,6 +48,7 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
       },
     },
   });
+  const formRef = useFocusFirstInvalid(submitCount);
   const stats = useFieldArray({ control, name: "stats" });
   const activities = useFieldArray({ control, name: "activities" });
 
@@ -65,13 +71,21 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
   const box = "space-y-4 rounded border border-line bg-card p-5";
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-5">
+    <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-5">
+      {showDraftNotice && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded bg-accent-soft p-3 text-sm">
+          {t("admin.draftRestored")}
+          <Button variant="ghost" onClick={onDiscardDraft}>
+            {t("admin.discardDraft")}
+          </Button>
+        </div>
+      )}
       <div className={box}>
         <Controller
           name="intro"
           control={control}
           render={({ field }) => (
-            <LocalizedField id="about-intro" label={t("admin.aboutIntro")} value={field.value} onChange={field.onChange} multiline maxLength={1000} error={fieldError(errors.intro?.message)} {...lp} />
+            <LocalizedField id="about-intro" required inputRef={field.ref} label={t("admin.aboutIntro")} value={field.value} onChange={field.onChange} multiline maxLength={1000} error={fieldError(errors.intro?.message)} {...lp} />
           )}
         />
       </div>
@@ -90,10 +104,11 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
                 id={`stat-${i}-value`}
                 maxLength={20}
                 aria-invalid={Boolean(errors.stats?.[i]?.value)}
+                aria-describedby={errors.stats?.[i]?.value ? `stat-${i}-value-error` : undefined}
                 {...register(`stats.${i}.value`)}
               />
               {errors.stats?.[i]?.value && (
-                <p role="alert" className="mt-1.5 text-sm text-danger">
+                <p id={`stat-${i}-value-error`} role="alert" className="mt-1.5 text-sm text-danger">
                   {fieldError(errors.stats[i]?.value?.message)}
                 </p>
               )}
@@ -102,7 +117,7 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
               name={`stats.${i}.label`}
               control={control}
               render={({ field }) => (
-                <LocalizedField id={`stat-${i}-label`} label={t("admin.statLabel")} value={field.value} onChange={field.onChange} maxLength={80} error={fieldError(errors.stats?.[i]?.label?.message)} {...lp} />
+                <LocalizedField id={`stat-${i}-label`} required inputRef={field.ref} label={t("admin.statLabel")} value={field.value} onChange={field.onChange} maxLength={80} error={fieldError(errors.stats?.[i]?.label?.message)} {...lp} />
               )}
             />
             <Button variant="ghost" className="text-danger" onClick={() => stats.remove(i)}>
@@ -127,7 +142,7 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
               name={`activities.${i}.text`}
               control={control}
               render={({ field }) => (
-                <LocalizedField id={`activity-${i}`} label={`${i + 1}.`} value={field.value} onChange={field.onChange} maxLength={200} error={fieldError(errors.activities?.[i]?.text?.message)} {...lp} />
+                <LocalizedField id={`activity-${i}`} required inputRef={field.ref} label={`${i + 1}.`} value={field.value} onChange={field.onChange} maxLength={200} error={fieldError(errors.activities?.[i]?.text?.message)} {...lp} />
               )}
             />
             <Button variant="ghost" className="text-danger" onClick={() => activities.remove(i)}>
@@ -150,14 +165,14 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
           name="contacts.address"
           control={control}
           render={({ field }) => (
-            <LocalizedField id="about-address" label={t("admin.aboutAddress")} value={field.value} onChange={field.onChange} maxLength={200} error={fieldError(errors.contacts?.address?.message)} {...lp} />
+            <LocalizedField id="about-address" inputRef={field.ref} label={t("admin.aboutAddress")} value={field.value} onChange={field.onChange} maxLength={200} error={fieldError(errors.contacts?.address?.message)} {...lp} />
           )}
         />
         <Controller
           name="contacts.hours"
           control={control}
           render={({ field }) => (
-            <LocalizedField id="about-hours" label={t("admin.aboutHours")} value={field.value} onChange={field.onChange} maxLength={100} error={fieldError(errors.contacts?.hours?.message)} {...lp} />
+            <LocalizedField id="about-hours" inputRef={field.ref} label={t("admin.aboutHours")} value={field.value} onChange={field.onChange} maxLength={100} error={fieldError(errors.contacts?.hours?.message)} {...lp} />
           )}
         />
         <div className="grid gap-4 sm:grid-cols-2">
@@ -173,9 +188,15 @@ export const AboutForm = ({ about, onSave, saveError, savedAt }: Props) => {
                 <label htmlFor={`about-${key}`} className="mb-1.5 block text-sm font-medium">
                   {t(label)}
                 </label>
-                <Input id={`about-${key}`} type={type} aria-invalid={Boolean(message)} {...register(`contacts.${key}`)} />
+                <Input
+                  id={`about-${key}`}
+                  type={type}
+                  aria-invalid={Boolean(message)}
+                  aria-describedby={message ? `about-${key}-error` : undefined}
+                  {...register(`contacts.${key}`)}
+                />
                 {message && (
-                  <p role="alert" className="mt-1.5 text-sm text-danger">
+                  <p id={`about-${key}-error`} role="alert" className="mt-1.5 text-sm text-danger">
                     {message}
                   </p>
                 )}
