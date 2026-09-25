@@ -20,7 +20,7 @@ export const AdminPartnerNewPage = () => {
       >
         ← {t("admin.backToPartners")}
       </Link>
-      <PageHeader title={t("admin.newPartner")} lead={t("admin.logoAfterSave")} />
+      <PageHeader title={t("admin.newPartner")} lead={t("admin.logoAfterSave")} focusOnMount />
       <PartnerForm
         onSaved={(saved) => navigate(LIST_PATH, { state: { savedName: partnerDisplayName(saved, locale, defaultLocale) } })}
         onCancel={() => navigate(LIST_PATH)}

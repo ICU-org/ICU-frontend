@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { PartnerLogo, type AdminPartner } from "@/entities/Partner";
 import { getDefaultLocale, useT } from "@/shared/i18n";
 import { Button } from "@/shared/ui";
@@ -8,6 +9,7 @@ type Props = { partner: AdminPartner; onChanged: (partner: AdminPartner) => void
 export const PartnerLogoUpload = ({ partner, onChanged }: Props) => {
   const t = useT();
   const { upload, remove, pending, error } = usePartnerLogo(onChanged);
+  const inputRef = useRef<HTMLInputElement>(null);
   const inputId = `logo-${partner.id}`;
 
   return (
@@ -22,6 +24,7 @@ export const PartnerLogoUpload = ({ partner, onChanged }: Props) => {
         >
           {t("admin.uploadLogo")}
           <input
+            ref={inputRef}
             id={inputId}
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -35,7 +38,12 @@ export const PartnerLogoUpload = ({ partner, onChanged }: Props) => {
           />
         </label>
         {partner.logoUrl && (
-          <Button variant="ghost" disabled={pending} onClick={() => void remove(partner.id)}>
+          <Button
+            variant="ghost"
+            disabled={pending}
+            // кнопка исчезнет вместе с логотипом — фокус на «Загрузить логотип»
+            onClick={() => void remove(partner.id).then((ok) => ok && inputRef.current?.focus())}
+          >
             {t("admin.removeLogo")}
           </Button>
         )}

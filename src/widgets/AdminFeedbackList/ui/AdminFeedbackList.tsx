@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { DeleteFeedbackButton } from "@/features/DeleteFeedback";
 import { ExclusionToggle } from "@/features/ToggleFeedbackExclusion";
 import type { FeedbackFilter } from "@/entities/Feedback";
@@ -11,12 +12,18 @@ export const AdminFeedbackList = () => {
   const t = useT();
   const { locale } = useLocale();
   const { items, total, page, pages, setPage, filter, setFilter, loading, error, reload } = useFeedbackList();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  /** Строка исчезла вместе с нажатой кнопкой — фокус на заголовок, а не в начало страницы. */
+  const onDeleted = () => {
+    reload();
+    titleRef.current?.focus();
+  };
 
   return (
     <section aria-labelledby="feedback-list-title" className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 id="feedback-list-title" className="text-xl font-semibold">
+          <h2 id="feedback-list-title" ref={titleRef} tabIndex={-1} className="text-xl font-semibold focus:outline-none">
             {t("admin.feedbackTitle")}
           </h2>
           <p className="text-sm text-muted">{t("admin.total", { count: total })}</p>
@@ -67,7 +74,7 @@ export const AdminFeedbackList = () => {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <ExclusionToggle item={item} onChanged={reload} />
-                  <DeleteFeedbackButton id={item.id} onDeleted={reload} />
+                  <DeleteFeedbackButton id={item.id} onDeleted={onDeleted} />
                 </div>
               </li>
             );
